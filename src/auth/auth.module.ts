@@ -13,7 +13,7 @@ import { User } from '../user/user.entity';
     TypeOrmModule.forFeature([User]),
     PassportModule,
     JwtModule.register({
-      secret: 'schedula_secret_key',
+      secret: process.env.JWT_SECRET || 'schedula_secret_key',
       signOptions: { expiresIn: '1d' },
     }),
   ],
