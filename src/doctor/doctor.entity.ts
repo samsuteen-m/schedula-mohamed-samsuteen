@@ -34,6 +34,9 @@ export class Doctor {
   @Column({ nullable: true })
   phone: string;
 
+  @Column({ default: true })
+  isAvailable: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

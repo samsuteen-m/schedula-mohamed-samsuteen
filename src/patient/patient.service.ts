@@ -18,7 +18,6 @@ export class PatientService {
     if (existing) {
       throw new ConflictException('Patient profile already exists');
     }
-
     const patient = this.patientRepository.create({
       ...dto,
       user: { id: userId },
@@ -44,7 +43,6 @@ export class PatientService {
     if (!patient) {
       throw new NotFoundException('Patient profile not found');
     }
-
     Object.assign(patient, dto);
     await this.patientRepository.save(patient);
     return { message: 'Patient profile updated successfully', patient };
