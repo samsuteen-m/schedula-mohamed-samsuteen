@@ -9,7 +9,6 @@ import { Roles } from '../auth/roles.decorator';
 export class DoctorController {
   constructor(private doctorService: DoctorService) {}
 
-  // Public routes - no token needed
   @Get()
   getAllDoctors(@Query() query: any) {
     return this.doctorService.getAllDoctors(query);
@@ -20,7 +19,6 @@ export class DoctorController {
     return this.doctorService.getDoctorById(id);
   }
 
-  // Protected routes - token needed
   @Post('profile')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
   @Roles('DOCTOR')

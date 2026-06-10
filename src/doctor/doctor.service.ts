@@ -50,7 +50,6 @@ export class DoctorService {
 
   async getAllDoctors(query: any) {
     const { specialization, search, page, limit, availability } = query;
-
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 10;
 
@@ -59,17 +58,14 @@ export class DoctorService {
     }
 
     const skip = (pageNum - 1) * limitNum;
-
     const whereConditions: any = {};
 
     if (specialization) {
       whereConditions.specialization = Like(`%${specialization}%`);
     }
-
     if (search) {
       whereConditions.fullName = Like(`%${search}%`);
     }
-
     if (availability !== undefined) {
       whereConditions.isAvailable = availability === 'true';
     }
@@ -82,30 +78,17 @@ export class DoctorService {
     });
 
     if (doctors.length === 0) {
-      return {
-        message: 'No doctors found',
-        data: [],
-        total: 0,
-        page: pageNum,
-        limit: limitNum,
-      };
+      return { message: 'No doctors found', data: [], total: 0, page: pageNum, limit: limitNum };
     }
 
-    return {
-      data: doctors,
-      total,
-      page: pageNum,
-      limit: limitNum,
-    };
+    return { data: doctors, total, page: pageNum, limit: limitNum };
   }
 
   async getDoctorById(id: string) {
     if (!id) {
       throw new BadRequestException('Invalid doctor ID');
     }
-    const doctor = await this.doctorRepository.findOne({
-      where: { id },
-    });
+    const doctor = await this.doctorRepository.findOne({ where: { id } });
     if (!doctor) {
       throw new NotFoundException('Doctor not found');
     }
