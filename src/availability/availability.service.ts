@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not } from 'typeorm';
 import { RecurringAvailability } from './recurring-availability.entity';
 import { CustomAvailability } from './custom-availability.entity';
 import { RecurringAvailabilityDto, CustomAvailabilityDto, UpdateAvailabilityDto } from './availability.dto';
@@ -57,6 +57,15 @@ export class AvailabilityService {
       where: { doctor: { id: doctor.id }, dayOfWeek: dto.dayOfWeek, isActive: true },
     });
 
+    // Check duplicate slot
+    const duplicate = existing.find(
+      slot => slot.startTime === dto.startTime && slot.endTime === dto.endTime,
+    );
+    if (duplicate) {
+      throw new BadRequestException(`Duplicate slot already exists for ${dto.dayOfWeek}`);
+    }
+
+    // Check overlap
     for (const slot of existing) {
       if (this.hasOverlap(slot.startTime, slot.endTime, dto.startTime, dto.endTime)) {
         throw new BadRequestException(`Overlapping time slot exists for ${dto.dayOfWeek}`);
@@ -107,7 +116,33 @@ export class AvailabilityService {
       throw new BadRequestException('End time must be after start time');
     }
 
-    Object.assign(availability, dto);
+    // Check overlap with other slots (excluding current slot)
+    const otherSlots = await this.recurringRepo.find({
+      where: {
+        doctor: { id: doctor.id },
+        dayOfWeek: availability.dayOfWeek,
+        isActive: true,
+        id: Not(id),
+      },
+    });
+
+    for (const slot of otherSlots) {
+      if (this.hasOverlap(slot.startTime, slot.endTime, newStart, newEnd)) {
+        throw new BadRequestException('Updated time overlaps with existing slot');
+      }
+    }
+
+    // Check duplicate
+    const duplicate = otherSlots.find(
+      slot => slot.startTime === newStart && slot.endTime === newEnd,
+    );
+    if (duplicate) {
+      throw new BadRequestException('Duplicate slot already exists');
+    }
+
+   availability.startTime = newStart;
+availability.endTime = newEnd;
+if (dto.isActive !== undefined) availability.isActive = dto.isActive;
     await this.recurringRepo.save(availability);
     return { message: 'Availability updated successfully', availability };
   }
@@ -149,6 +184,15 @@ export class AvailabilityService {
       where: { doctor: { id: doctor.id }, date: dto.date },
     });
 
+    // Check duplicate
+    const duplicate = existing.find(
+      slot => slot.startTime === dto.startTime && slot.endTime === dto.endTime,
+    );
+    if (duplicate) {
+      throw new BadRequestException('Duplicate override slot already exists for this date');
+    }
+
+    // Check overlap
     for (const slot of existing) {
       if (this.hasOverlap(slot.startTime, slot.endTime, dto.startTime, dto.endTime)) {
         throw new BadRequestException(`Overlapping time slot exists for ${dto.date}`);

@@ -25,7 +25,7 @@ import { CustomAvailability } from './availability/custom-availability.entity';
       password: process.env.DB_PASSWORD || '123456',
       database: process.env.DB_NAME || 'schedula',
       entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability],
-      synchronize: true,
+      synchronize: false,
       ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
     }),
     AuthModule,
