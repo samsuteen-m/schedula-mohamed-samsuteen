@@ -5,9 +5,14 @@ import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
+import { AvailabilityModule } from './availability/availability.module';
+import { SlotModule } from './slot/slot.module';
 import { User } from './user/user.entity';
 import { Doctor } from './doctor/doctor.entity';
 import { Patient } from './patient/patient.entity';
+import { RecurringAvailability } from './availability/recurring-availability.entity';
+import { CustomAvailability } from './availability/custom-availability.entity';
+import { Slot } from './slot/slot.entity';
 
 @Module({
   imports: [
@@ -16,16 +21,20 @@ import { Patient } from './patient/patient.entity';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      url: process.env.DATABASE_URL,
-      entities: [User, Doctor, Patient],
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      username: process.env.DB_USERNAME || 'postgres',
+      password: process.env.DB_PASSWORD || '123456',
+      database: process.env.DB_NAME || 'schedula',
+      entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability, Slot],
       synchronize: true,
-      ssl: {
-        rejectUnauthorized: false,
-      },
+      ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
     }),
     AuthModule,
     DoctorModule,
     PatientModule,
+    AvailabilityModule,
+    SlotModule,
   ],
   controllers: [AppController],
 })
