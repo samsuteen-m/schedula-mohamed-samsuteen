@@ -7,12 +7,14 @@ import { DoctorModule } from './doctor/doctor.module';
 import { PatientModule } from './patient/patient.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { SlotModule } from './slot/slot.module';
+import { AppointmentModule } from './appointment/appointment.module';
 import { User } from './user/user.entity';
 import { Doctor } from './doctor/doctor.entity';
 import { Patient } from './patient/patient.entity';
 import { RecurringAvailability } from './availability/recurring-availability.entity';
 import { CustomAvailability } from './availability/custom-availability.entity';
 import { Slot } from './slot/slot.entity';
+import { Appointment } from './appointment/appointment.entity';
 
 @Module({
   imports: [
@@ -26,7 +28,7 @@ import { Slot } from './slot/slot.entity';
       username: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || '123456',
       database: process.env.DB_NAME || 'schedula',
-      entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability, Slot],
+      entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability, Slot, Appointment],
       synchronize: true,
       ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
     }),
@@ -35,6 +37,7 @@ import { Slot } from './slot/slot.entity';
     PatientModule,
     AvailabilityModule,
     SlotModule,
+    AppointmentModule,
   ],
   controllers: [AppController],
 })
