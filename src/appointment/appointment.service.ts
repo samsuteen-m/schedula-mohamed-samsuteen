@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Appointment, AppointmentStatus } from './appointment.entity';
-import { Slot, SlotStatus } from '../slot/slot.entity';
+import { Slot, SlotStatus, SlotType } from '../slot/slot.entity';
 import { Doctor } from '../doctor/doctor.entity';
 import { BookAppointmentDto } from './appointment.dto';
 
@@ -18,19 +18,14 @@ export class AppointmentService {
   ) {}
 
   async bookAppointment(patientId: string, dto: BookAppointmentDto) {
-    // Check doctor exists
-    const doctor = await this.doctorRepo.findOne({
-      where: { id: dto.doctorId },
-    });
+    const doctor = await this.doctorRepo.findOne({ where: { id: dto.doctorId } });
     if (!doctor) throw new NotFoundException('Doctor not found');
 
-    // Check future date
     const appointmentDateTime = new Date(`${dto.date}T${dto.startTime}`);
     if (appointmentDateTime <= new Date()) {
       throw new BadRequestException('Cannot book appointment for past date or time');
     }
 
-    // Find the slot
     const slot = await this.slotRepo.findOne({
       where: {
         doctor: { id: dto.doctorId },
@@ -41,12 +36,63 @@ export class AppointmentService {
     });
     if (!slot) throw new NotFoundException('Slot not found');
 
-    // Check slot is available
+    // Handle WAVE booking
+    if (slot.slotType === SlotType.WAVE) {
+      if (slot.bookedCount >= slot.maxCapacity) {
+        throw new BadRequestException(`Wave is full! Maximum capacity of ${slot.maxCapacity} patients reached`);
+      }
+
+      const existingWaveBooking = await this.appointmentRepo.findOne({
+        where: {
+          patient: { id: patientId },
+          slot: { id: slot.id },
+          status: AppointmentStatus.BOOKED,
+        },
+      });
+      if (existingWaveBooking) {
+        throw new BadRequestException('You have already booked this wave slot');
+      }
+
+      const tokenNumber = slot.bookedCount + 1;
+      slot.bookedCount = tokenNumber;
+
+      if (slot.bookedCount >= slot.maxCapacity) {
+        slot.status = SlotStatus.BOOKED;
+      }
+      await this.slotRepo.save(slot);
+
+      const appointment = this.appointmentRepo.create({
+        patient: { id: patientId },
+        doctor: { id: dto.doctorId },
+        slot: { id: slot.id },
+        date: dto.date,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        status: AppointmentStatus.BOOKED,
+        tokenNumber,
+        schedulingType: 'WAVE',
+      });
+      await this.appointmentRepo.save(appointment);
+
+      return {
+        message: 'Wave appointment booked successfully',
+        schedulingType: 'WAVE',
+        appointment: {
+          id: appointment.id,
+          date: appointment.date,
+          timeWindow: `${appointment.startTime} - ${appointment.endTime}`,
+          tokenNumber,
+          status: appointment.status,
+          waveSummary: `${slot.bookedCount}/${slot.maxCapacity} patients booked`,
+        },
+      };
+    }
+
+    // Handle STREAM booking
     if (slot.status !== SlotStatus.AVAILABLE) {
       throw new BadRequestException('Slot is already booked');
     }
 
-    // Check duplicate booking
     const existing = await this.appointmentRepo.findOne({
       where: {
         patient: { id: patientId },
@@ -56,7 +102,9 @@ export class AppointmentService {
     });
     if (existing) throw new BadRequestException('You have already booked this slot');
 
-    // Create appointment
+    slot.status = SlotStatus.BOOKED;
+    await this.slotRepo.save(slot);
+
     const appointment = this.appointmentRepo.create({
       patient: { id: patientId },
       doctor: { id: dto.doctorId },
@@ -65,16 +113,20 @@ export class AppointmentService {
       startTime: dto.startTime,
       endTime: dto.endTime,
       status: AppointmentStatus.BOOKED,
+      schedulingType: 'STREAM',
     });
     await this.appointmentRepo.save(appointment);
 
-    // Mark slot as booked
-    slot.status = SlotStatus.BOOKED;
-    await this.slotRepo.save(slot);
-
     return {
-      message: 'Appointment booked successfully',
-      appointment,
+      message: 'Stream appointment booked successfully',
+      schedulingType: 'STREAM',
+      appointment: {
+        id: appointment.id,
+        date: appointment.date,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        status: appointment.status,
+      },
     };
   }
 
@@ -97,6 +149,8 @@ export class AppointmentService {
         startTime: apt.startTime,
         endTime: apt.endTime,
         status: apt.status,
+        schedulingType: apt.schedulingType,
+        tokenNumber: apt.tokenNumber || null,
         doctor: {
           id: apt.doctor?.id,
           fullName: apt.doctor?.fullName,
@@ -115,29 +169,31 @@ export class AppointmentService {
 
     if (!appointment) throw new NotFoundException('Appointment not found');
 
-    // Check ownership
     if (appointment.patient.id !== patientId) {
       throw new ForbiddenException('You can only cancel your own appointments');
     }
 
-    // Check already cancelled
     if (appointment.status === AppointmentStatus.CANCELLED) {
       throw new BadRequestException('Appointment is already cancelled');
     }
 
-    // Check past appointment
     const appointmentDateTime = new Date(`${appointment.date}T${appointment.startTime}`);
     if (appointmentDateTime <= new Date()) {
       throw new BadRequestException('Cannot cancel past appointment');
     }
 
-    // Cancel appointment
     appointment.status = AppointmentStatus.CANCELLED;
     await this.appointmentRepo.save(appointment);
 
-    // Free up the slot
     if (appointment.slot) {
-      appointment.slot.status = SlotStatus.AVAILABLE;
+      if (appointment.slot.slotType === SlotType.WAVE) {
+        appointment.slot.bookedCount = Math.max(0, appointment.slot.bookedCount - 1);
+        if (appointment.slot.bookedCount < appointment.slot.maxCapacity) {
+          appointment.slot.status = SlotStatus.AVAILABLE;
+        }
+      } else {
+        appointment.slot.status = SlotStatus.AVAILABLE;
+      }
       await this.slotRepo.save(appointment.slot);
     }
 
@@ -168,6 +224,8 @@ export class AppointmentService {
         startTime: apt.startTime,
         endTime: apt.endTime,
         status: apt.status,
+        schedulingType: apt.schedulingType,
+        tokenNumber: apt.tokenNumber || null,
         patient: {
           id: apt.patient?.id,
           name: apt.patient?.name,

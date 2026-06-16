@@ -1,6 +1,11 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { User } from '../user/user.entity';
 
+export enum SchedulingType {
+  STREAM = 'STREAM',
+  WAVE = 'WAVE',
+}
+
 @Entity('doctors')
 export class Doctor {
   @PrimaryGeneratedColumn('uuid')
@@ -36,6 +41,13 @@ export class Doctor {
 
   @Column({ default: true })
   isAvailable: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: SchedulingType,
+    default: SchedulingType.STREAM,
+  })
+  schedulingType: SchedulingType;
 
   @CreateDateColumn()
   createdAt: Date;
