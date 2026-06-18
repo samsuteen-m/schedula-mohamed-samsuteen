@@ -7,6 +7,11 @@ export enum SlotStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum SlotType {
+  STREAM = 'STREAM',
+  WAVE = 'WAVE',
+}
+
 @Entity('slots')
 export class Slot {
   @PrimaryGeneratedColumn('uuid')
@@ -30,6 +35,18 @@ export class Slot {
 
   @Column({ type: 'enum', enum: SlotStatus, default: SlotStatus.AVAILABLE })
   status: SlotStatus;
+
+  @Column({ type: 'enum', enum: SlotType, default: SlotType.STREAM })
+  slotType: SlotType;
+
+  @Column({ type: 'int', nullable: true })
+  maxCapacity: number;
+
+  @Column({ type: 'int', default: 0 })
+  bookedCount: number;
+
+  @Column({ type: 'int', nullable: true })
+  bufferTime: number;
 
   @CreateDateColumn()
   createdAt: Date;
