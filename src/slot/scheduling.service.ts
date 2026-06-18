@@ -69,15 +69,12 @@ export class SchedulingService {
     while (current < end) {
       const slotEnd = new Date(current.getTime() + duration * 60000);
       if (slotEnd > end) break;
-
       slots.push({
         startTime: current.toTimeString().slice(0, 8),
         endTime: slotEnd.toTimeString().slice(0, 8),
       });
-
       current = new Date(slotEnd.getTime() + bufferTime * 60000);
     }
-
     return slots;
   }
 
@@ -99,23 +96,14 @@ export class SchedulingService {
     }
 
     const dateObj = new Date(dto.date);
-    if (isNaN(dateObj.getTime())) {
-      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
-    }
+    if (isNaN(dateObj.getTime())) throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (dateObj < today) {
-      throw new BadRequestException('Cannot generate slots for past dates');
-    }
+    if (dateObj < today) throw new BadRequestException('Cannot generate slots for past dates');
 
-    if (dto.duration < 10 || dto.duration > 120) {
-      throw new BadRequestException('Duration must be between 10 and 120 minutes');
-    }
-
-    if (dto.bufferTime && (dto.bufferTime < 0 || dto.bufferTime > 60)) {
-      throw new BadRequestException('Buffer time must be between 0 and 60 minutes');
-    }
+    if (dto.duration < 10 || dto.duration > 120) throw new BadRequestException('Duration must be between 10 and 120 minutes');
+    if (dto.bufferTime && (dto.bufferTime < 0 || dto.bufferTime > 60)) throw new BadRequestException('Buffer time must be between 0 and 60 minutes');
 
     const availabilityWindows = await this.getAvailabilityWindows(doctor.id, dto.date);
     if (availabilityWindows.length === 0) {
@@ -124,12 +112,7 @@ export class SchedulingService {
 
     const allSlots: TimeWindow[] = [];
     for (const window of availabilityWindows) {
-      const timeSlots = this.generateStreamSlots(
-        window.startTime,
-        window.endTime,
-        dto.duration,
-        dto.bufferTime || 0,
-      );
+      const timeSlots = this.generateStreamSlots(window.startTime, window.endTime, dto.duration, dto.bufferTime || 0);
       allSlots.push(...timeSlots);
     }
 
@@ -137,13 +120,7 @@ export class SchedulingService {
       return { message: 'No slots can be generated with given duration', date: dto.date, slots: [] };
     }
 
-    // Delete old available stream slots
-    await this.slotRepo.delete({
-      doctor: { id: doctor.id },
-      date: dto.date,
-      status: SlotStatus.AVAILABLE,
-      slotType: SlotType.STREAM,
-    });
+    await this.slotRepo.delete({ doctor: { id: doctor.id }, date: dto.date, status: SlotStatus.AVAILABLE, slotType: SlotType.STREAM });
 
     const savedSlots: Slot[] = [];
     for (const slot of allSlots) {
@@ -187,32 +164,20 @@ export class SchedulingService {
     }
 
     const dateObj = new Date(dto.date);
-    if (isNaN(dateObj.getTime())) {
-      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
-    }
+    if (isNaN(dateObj.getTime())) throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    if (dateObj < today) {
-      throw new BadRequestException('Cannot generate slots for past dates');
-    }
+    if (dateObj < today) throw new BadRequestException('Cannot generate slots for past dates');
 
-    if (dto.maxCapacity < 1 || dto.maxCapacity > 50) {
-      throw new BadRequestException('Max capacity must be between 1 and 50');
-    }
+    if (dto.maxCapacity < 1 || dto.maxCapacity > 50) throw new BadRequestException('Max capacity must be between 1 and 50');
 
     const availabilityWindows = await this.getAvailabilityWindows(doctor.id, dto.date);
     if (availabilityWindows.length === 0) {
       return { message: 'No availability found for this date', date: dto.date, slots: [] };
     }
 
-    // Delete old available wave slots
-    await this.slotRepo.delete({
-      doctor: { id: doctor.id },
-      date: dto.date,
-      status: SlotStatus.AVAILABLE,
-      slotType: SlotType.WAVE,
-    });
+    await this.slotRepo.delete({ doctor: { id: doctor.id }, date: dto.date, status: SlotStatus.AVAILABLE, slotType: SlotType.WAVE });
 
     const savedSlots: Slot[] = [];
     for (const window of availabilityWindows) {
@@ -251,13 +216,10 @@ export class SchedulingService {
   async getScheduledSlots(doctorId: string, date: string) {
     const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
     if (!doctor) throw new NotFoundException('Doctor not found');
-
     if (!date) throw new BadRequestException('Date is required');
 
     const dateObj = new Date(date);
-    if (isNaN(dateObj.getTime())) {
-      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
-    }
+    if (isNaN(dateObj.getTime())) throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
 
     const slots = await this.slotRepo.find({
       where: { doctor: { id: doctorId }, date, status: SlotStatus.AVAILABLE },

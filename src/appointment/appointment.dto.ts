@@ -13,3 +13,14 @@ export class BookAppointmentDto {
   @IsString()
   endTime: string;
 }
+
+export class RescheduleAppointmentDto {
+  @IsDateString()
+  date: string;
+
+  @IsString()
+  startTime: string;
+
+  @IsString()
+  endTime: string;
+}

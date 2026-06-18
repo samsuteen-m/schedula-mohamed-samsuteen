@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsString, IsOptional, Min, Max, IsDateString } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, Min, Max, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { SchedulingType } from '../doctor/doctor.entity';
 
