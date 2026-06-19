@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, UseGuards, Request, Param, Query } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AppointmentService } from './appointment.service';
 import { BookAppointmentDto, RescheduleAppointmentDto } from './appointment.dto';
@@ -50,7 +50,12 @@ export class DoctorAppointmentController {
   constructor(private appointmentService: AppointmentService) {}
 
   @Get('appointments')
-  getDoctorAppointments(@Request() req) {
-    return this.appointmentService.getDoctorAppointments(req.user.id);
+  getDoctorAppointments(@Request() req, @Query('date') date?: string) {
+    return this.appointmentService.getDoctorAppointments(req.user.id, date);
+  }
+
+  @Patch('appointments/:id/cancel')
+  cancelAppointmentByDoctor(@Request() req, @Param('id') id: string) {
+    return this.appointmentService.cancelAppointmentByDoctor(req.user.id, id);
   }
 }

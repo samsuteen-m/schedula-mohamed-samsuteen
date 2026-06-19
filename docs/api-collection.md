@@ -2,7 +2,7 @@
 
 ## Base URL
 Local: http://localhost:3000
-Production: https://schedula-api.onrender.com
+Production: https://schedula-mohamed-samsuteen.onrender.com
 
 ---
 
