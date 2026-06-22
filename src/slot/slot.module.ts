@@ -4,6 +4,8 @@ import { SlotService } from './slot.service';
 import { SlotController } from './slot.controller';
 import { SchedulingService } from './scheduling.service';
 import { SchedulingController } from './scheduling.controller';
+import { NextAvailableService } from './next-available.service';
+import { NextAvailableController } from './next-available.controller';
 import { Slot } from './slot.entity';
 import { Doctor } from '../doctor/doctor.entity';
 import { RecurringAvailability } from '../availability/recurring-availability.entity';
@@ -13,7 +15,7 @@ import { CustomAvailability } from '../availability/custom-availability.entity';
   imports: [
     TypeOrmModule.forFeature([Slot, Doctor, RecurringAvailability, CustomAvailability]),
   ],
-  controllers: [SlotController, SchedulingController],
-  providers: [SlotService, SchedulingService],
+  controllers: [SlotController, SchedulingController, NextAvailableController],
+  providers: [SlotService, SchedulingService, NextAvailableService],
 })
 export class SlotModule {}
