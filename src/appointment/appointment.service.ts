@@ -230,7 +230,6 @@ export class AppointmentService {
     appointmentId: string,
     dto: RescheduleAppointmentDto,
   ) {
-    // Find existing appointment
     const appointment = await this.appointmentRepo.findOne({
       where: { id: appointmentId },
       relations: ['patient', 'slot', 'doctor'],
@@ -238,20 +237,16 @@ export class AppointmentService {
 
     if (!appointment) throw new NotFoundException('Appointment not found');
 
-    // Check ownership
     if (appointment.patient.id !== patientId) {
       throw new ForbiddenException('You can only reschedule your own appointments');
     }
 
-    // Check if cancelled
     if (appointment.status === AppointmentStatus.CANCELLED) {
       throw new BadRequestException('Cannot reschedule a cancelled appointment');
     }
 
-    // Check 30 min cutoff for old appointment
     this.checkCutoffTime(appointment.date, appointment.startTime);
 
-    // Check same slot
     if (
       appointment.date === dto.date &&
       appointment.startTime === dto.startTime &&
@@ -260,19 +255,16 @@ export class AppointmentService {
       throw new BadRequestException('New slot is the same as the current appointment');
     }
 
-    // Check future date
     const newDateTime = new Date(`${dto.date}T${dto.startTime}`);
     if (newDateTime <= new Date()) {
       throw new BadRequestException('Cannot reschedule to past date or time');
     }
 
-    // Check 30 min cutoff for new slot
     const diffMinutes = (newDateTime.getTime() - new Date().getTime()) / 60000;
     if (diffMinutes < 30) {
       throw new BadRequestException('New slot must be at least 30 minutes from now');
     }
 
-    // Find new slot
     const newSlot = await this.slotRepo.findOne({
       where: {
         doctor: { id: appointment.doctor.id },
@@ -294,7 +286,6 @@ export class AppointmentService {
       });
     }
 
-    // Handle WAVE rescheduling
     if (newSlot.slotType === SlotType.WAVE) {
       if (newSlot.bookedCount >= newSlot.maxCapacity) {
         const suggestion = await this.suggestNextAvailableSlot(
@@ -308,7 +299,6 @@ export class AppointmentService {
         });
       }
 
-      // Release old wave slot
       if (appointment.slot) {
         appointment.slot.bookedCount = Math.max(0, appointment.slot.bookedCount - 1);
         if (appointment.slot.bookedCount < appointment.slot.maxCapacity) {
@@ -317,7 +307,6 @@ export class AppointmentService {
         await this.slotRepo.save(appointment.slot);
       }
 
-      // Book new wave slot
       const tokenNumber = newSlot.bookedCount + 1;
       newSlot.bookedCount = tokenNumber;
       if (newSlot.bookedCount >= newSlot.maxCapacity) {
@@ -345,7 +334,6 @@ export class AppointmentService {
       };
     }
 
-    // Handle STREAM rescheduling
     if (newSlot.status !== SlotStatus.AVAILABLE) {
       const suggestion = await this.suggestNextAvailableSlot(
         appointment.doctor.id,
@@ -358,13 +346,11 @@ export class AppointmentService {
       });
     }
 
-    // Release old slot
     if (appointment.slot) {
       appointment.slot.status = SlotStatus.AVAILABLE;
       await this.slotRepo.save(appointment.slot);
     }
 
-    // Book new slot
     newSlot.status = SlotStatus.BOOKED;
     await this.slotRepo.save(newSlot);
 
@@ -434,7 +420,6 @@ export class AppointmentService {
       throw new BadRequestException('Appointment is already cancelled');
     }
 
-    // Check 30 min cutoff
     this.checkCutoffTime(appointment.date, appointment.startTime);
 
     appointment.status = AppointmentStatus.CANCELLED;
@@ -455,14 +440,30 @@ export class AppointmentService {
     return { message: 'Appointment cancelled successfully' };
   }
 
-  async getDoctorAppointments(userId: string) {
+  async getDoctorAppointments(userId: string, date?: string) {
     const doctor = await this.doctorRepo.findOne({
       where: { user: { id: userId } },
     });
     if (!doctor) throw new NotFoundException('Doctor profile not found');
 
+    if (date) {
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) {
+        throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+      }
+    }
+
+    const whereCondition: any = {
+      doctor: { id: doctor.id },
+      status: AppointmentStatus.BOOKED,
+    };
+
+    if (date) {
+      whereCondition.date = date;
+    }
+
     const appointments = await this.appointmentRepo.find({
-      where: { doctor: { id: doctor.id } },
+      where: whereCondition,
       relations: ['patient', 'slot'],
       order: { date: 'ASC', startTime: 'ASC' },
     });
@@ -488,5 +489,44 @@ export class AppointmentService {
         },
       })),
     };
+  }
+
+  async cancelAppointmentByDoctor(userId: string, appointmentId: string) {
+    const doctor = await this.doctorRepo.findOne({
+      where: { user: { id: userId } },
+    });
+    if (!doctor) throw new NotFoundException('Doctor profile not found');
+
+    const appointment = await this.appointmentRepo.findOne({
+      where: { id: appointmentId },
+      relations: ['doctor', 'slot'],
+    });
+
+    if (!appointment) throw new NotFoundException('Appointment not found');
+
+    if (appointment.doctor.id !== doctor.id) {
+      throw new ForbiddenException('You can only cancel your own appointments');
+    }
+
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      throw new BadRequestException('Appointment is already cancelled');
+    }
+
+    appointment.status = AppointmentStatus.CANCELLED;
+    await this.appointmentRepo.save(appointment);
+
+    if (appointment.slot) {
+      if (appointment.slot.slotType === SlotType.WAVE) {
+        appointment.slot.bookedCount = Math.max(0, appointment.slot.bookedCount - 1);
+        if (appointment.slot.bookedCount < appointment.slot.maxCapacity) {
+          appointment.slot.status = SlotStatus.AVAILABLE;
+        }
+      } else {
+        appointment.slot.status = SlotStatus.AVAILABLE;
+      }
+      await this.slotRepo.save(appointment.slot);
+    }
+
+    return { message: 'Appointment cancelled successfully by doctor' };
   }
 }
