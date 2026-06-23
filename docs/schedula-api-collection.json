@@ -1,0 +1,375 @@
+{
+  "info": {
+    "name": "Schedula API Collection",
+    "description": "Complete API collection for Schedula - Doctor Appointment Booking System. Covers Auth, Doctor/Patient Profiles, Discovery, Availability, Scheduling (Stream/Wave), Appointments, Rescheduling, and Doctor Appointment Management.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "doctorToken", "value": "" },
+    { "key": "patientToken", "value": "" },
+    { "key": "doctorId", "value": "" },
+    { "key": "appointmentId", "value": "" },
+    { "key": "availabilityId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Signup Doctor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Dr. Mohamed\",\n  \"email\": \"doctor@gmail.com\",\n  \"password\": \"123456\",\n  \"role\": \"DOCTOR\"\n}" },
+            "url": { "raw": "{{baseUrl}}/signup", "host": ["{{baseUrl}}"], "path": ["signup"] }
+          }
+        },
+        {
+          "name": "Signup Patient",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Patient Name\",\n  \"email\": \"patient@gmail.com\",\n  \"password\": \"123456\",\n  \"role\": \"PATIENT\"\n}" },
+            "url": { "raw": "{{baseUrl}}/signup", "host": ["{{baseUrl}}"], "path": ["signup"] }
+          }
+        },
+        {
+          "name": "Login Doctor",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"doctor@gmail.com\",\n  \"password\": \"123456\"\n}" },
+            "url": { "raw": "{{baseUrl}}/login", "host": ["{{baseUrl}}"], "path": ["login"] }
+          }
+        },
+        {
+          "name": "Login Patient",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"patient@gmail.com\",\n  \"password\": \"123456\"\n}" },
+            "url": { "raw": "{{baseUrl}}/login", "host": ["{{baseUrl}}"], "path": ["login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Doctor Profile",
+      "item": [
+        {
+          "name": "Create Doctor Profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Dr. Mohamed\",\n  \"specialization\": \"Cardiologist\",\n  \"qualification\": \"MBBS, MD\",\n  \"experience\": \"10 years\",\n  \"consultationFee\": \"700\",\n  \"consultationHours\": \"9AM - 5PM\",\n  \"bio\": \"Heart specialist\",\n  \"phone\": \"9876544444\",\n  \"isAvailable\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/profile", "host": ["{{baseUrl}}"], "path": ["doctor", "profile"] }
+          }
+        },
+        {
+          "name": "Get Doctor Profile",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/my/profile", "host": ["{{baseUrl}}"], "path": ["doctor", "my", "profile"] }
+          }
+        },
+        {
+          "name": "Update Doctor Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"consultationFee\": \"800\"\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/my/profile", "host": ["{{baseUrl}}"], "path": ["doctor", "my", "profile"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Patient Profile",
+      "item": [
+        {
+          "name": "Create Patient Profile",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Patient Name\",\n  \"age\": \"25\",\n  \"gender\": \"Male\",\n  \"phone\": \"9876544444\",\n  \"address\": \"Madurai, Tamil Nadu\",\n  \"bloodGroup\": \"O+\",\n  \"medicalHistory\": \"None\"\n}" },
+            "url": { "raw": "{{baseUrl}}/patient/profile", "host": ["{{baseUrl}}"], "path": ["patient", "profile"] }
+          }
+        },
+        {
+          "name": "Get Patient Profile",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/patient/profile", "host": ["{{baseUrl}}"], "path": ["patient", "profile"] }
+          }
+        },
+        {
+          "name": "Update Patient Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"address\": \"Chennai, Tamil Nadu\"\n}" },
+            "url": { "raw": "{{baseUrl}}/patient/profile", "host": ["{{baseUrl}}"], "path": ["patient", "profile"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Doctor Discovery",
+      "item": [
+        {
+          "name": "Get All Doctors",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/doctor", "host": ["{{baseUrl}}"], "path": ["doctor"] } }
+        },
+        {
+          "name": "Filter by Specialization",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/doctor?specialization=Cardiologist", "host": ["{{baseUrl}}"], "path": ["doctor"], "query": [{ "key": "specialization", "value": "Cardiologist" }] } }
+        },
+        {
+          "name": "Search by Name",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/doctor?search=Mohamed", "host": ["{{baseUrl}}"], "path": ["doctor"], "query": [{ "key": "search", "value": "Mohamed" }] } }
+        },
+        {
+          "name": "Pagination",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/doctor?page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["doctor"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] } }
+        },
+        {
+          "name": "Filter by Availability",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/doctor?availability=true", "host": ["{{baseUrl}}"], "path": ["doctor"], "query": [{ "key": "availability", "value": "true" }] } }
+        },
+        {
+          "name": "Get Doctor by ID",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/doctor/{{doctorId}}", "host": ["{{baseUrl}}"], "path": ["doctor", "{{doctorId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "5. Doctor Availability",
+      "item": [
+        {
+          "name": "Create Recurring Availability",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"dayOfWeek\": \"MONDAY\",\n  \"startTime\": \"10:00:00\",\n  \"endTime\": \"12:00:00\"\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/availability", "host": ["{{baseUrl}}"], "path": ["doctor", "availability"] }
+          }
+        },
+        {
+          "name": "Get Availability",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/availability", "host": ["{{baseUrl}}"], "path": ["doctor", "availability"] }
+          }
+        },
+        {
+          "name": "Update Availability",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"startTime\": \"09:00:00\",\n  \"endTime\": \"13:00:00\"\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/availability/{{availabilityId}}", "host": ["{{baseUrl}}"], "path": ["doctor", "availability", "{{availabilityId}}"] }
+          }
+        },
+        {
+          "name": "Delete Availability",
+          "request": {
+            "method": "DELETE",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/availability/{{availabilityId}}", "host": ["{{baseUrl}}"], "path": ["doctor", "availability", "{{availabilityId}}"] }
+          }
+        },
+        {
+          "name": "Custom Override",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"2026-06-20\",\n  \"startTime\": \"14:00:00\",\n  \"endTime\": \"16:00:00\"\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/availability/override", "host": ["{{baseUrl}}"], "path": ["doctor", "availability", "override"] }
+          }
+        },
+        {
+          "name": "Get Availability by Date",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/availability/date?date=2026-06-20", "host": ["{{baseUrl}}"], "path": ["doctor", "availability", "date"], "query": [{ "key": "date", "value": "2026-06-20" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Slot Generation (Legacy)",
+      "item": [
+        {
+          "name": "Generate Slots",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/slots/generate?date=2026-06-22&duration=30", "host": ["{{baseUrl}}"], "path": ["doctor", "slots", "generate"], "query": [{ "key": "date", "value": "2026-06-22" }, { "key": "duration", "value": "30" }] }
+          }
+        },
+        {
+          "name": "Patient Views Slots",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/{{doctorId}}/slots?date=2026-06-22", "host": ["{{baseUrl}}"], "path": ["doctor", "{{doctorId}}", "slots"], "query": [{ "key": "date", "value": "2026-06-22" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Advanced Scheduling (Stream & Wave)",
+      "item": [
+        {
+          "name": "Set Scheduling Type",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"schedulingType\": \"STREAM\"\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/scheduling-type", "host": ["{{baseUrl}}"], "path": ["doctor", "scheduling-type"] }
+          }
+        },
+        {
+          "name": "Generate Stream Slots",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"2026-06-22\",\n  \"duration\": 15,\n  \"bufferTime\": 5\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/slots/stream", "host": ["{{baseUrl}}"], "path": ["doctor", "slots", "stream"] }
+          }
+        },
+        {
+          "name": "Generate Wave Slots",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"2026-06-23\",\n  \"maxCapacity\": 5\n}" },
+            "url": { "raw": "{{baseUrl}}/doctor/slots/wave", "host": ["{{baseUrl}}"], "path": ["doctor", "slots", "wave"] }
+          }
+        },
+        {
+          "name": "Patient Views Scheduled Slots",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/{{doctorId}}/slots/scheduled?date=2026-06-22", "host": ["{{baseUrl}}"], "path": ["doctor", "{{doctorId}}", "slots", "scheduled"], "query": [{ "key": "date", "value": "2026-06-22" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Appointments (Patient)",
+      "item": [
+        {
+          "name": "Book Appointment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"doctorId\": \"{{doctorId}}\",\n  \"date\": \"2026-06-22\",\n  \"startTime\": \"10:00:00\",\n  \"endTime\": \"10:30:00\"\n}" },
+            "url": { "raw": "{{baseUrl}}/appointment", "host": ["{{baseUrl}}"], "path": ["appointment"] }
+          }
+        },
+        {
+          "name": "Patient Views My Appointments",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/appointment/my", "host": ["{{baseUrl}}"], "path": ["appointment", "my"] }
+          }
+        },
+        {
+          "name": "Patient Cancels Appointment",
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/appointment/{{appointmentId}}/cancel", "host": ["{{baseUrl}}"], "path": ["appointment", "{{appointmentId}}", "cancel"] }
+          }
+        },
+        {
+          "name": "Patient Reschedules Appointment",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+            "body": { "mode": "raw", "raw": "{\n  \"date\": \"2026-06-25\",\n  \"startTime\": \"11:00:00\",\n  \"endTime\": \"11:30:00\"\n}" },
+            "url": { "raw": "{{baseUrl}}/appointment/{{appointmentId}}/reschedule", "host": ["{{baseUrl}}"], "path": ["appointment", "{{appointmentId}}", "reschedule"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Doctor Appointment Management",
+      "item": [
+        {
+          "name": "Doctor Views All Appointments",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/appointments", "host": ["{{baseUrl}}"], "path": ["doctor", "appointments"] }
+          }
+        },
+        {
+          "name": "Doctor Filters Appointments by Date",
+          "request": {
+            "method": "GET",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/appointments?date=2026-06-22", "host": ["{{baseUrl}}"], "path": ["doctor", "appointments"], "query": [{ "key": "date", "value": "2026-06-22" }] }
+          }
+        },
+        {
+          "name": "Doctor Cancels Appointment",
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{doctorToken}}" }] },
+            "url": { "raw": "{{baseUrl}}/doctor/appointments/{{appointmentId}}/cancel", "host": ["{{baseUrl}}"], "path": ["doctor", "appointments", "{{appointmentId}}", "cancel"] }
+          }
+        }
+      ]
+    }
+  ]
+  ,{
+  "name": "10. Next Available Appointment",
+  "item": [
+    {
+      "name": "Check Today's Availability",
+      "request": {
+        "method": "GET",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+        "url": {
+          "raw": "{{baseUrl}}/doctor/{{doctorId}}/today-availability",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor", "{{doctorId}}", "today-availability"]
+        }
+      }
+    },
+    {
+      "name": "Find Next Available Appointment",
+      "request": {
+        "method": "GET",
+        "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{patientToken}}" }] },
+        "url": {
+          "raw": "{{baseUrl}}/doctor/{{doctorId}}/next-available",
+          "host": ["{{baseUrl}}"],
+          "path": ["doctor", "{{doctorId}}", "next-available"]
+        }
+      }
+    }
+  ]
+}
+}
