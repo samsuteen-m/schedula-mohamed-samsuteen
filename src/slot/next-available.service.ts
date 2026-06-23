@@ -1,15 +1,10 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Slot, SlotStatus, SlotType } from './slot.entity';
 import { Doctor, SchedulingType } from '../doctor/doctor.entity';
 import { RecurringAvailability } from '../availability/recurring-availability.entity';
 import { CustomAvailability } from '../availability/custom-availability.entity';
-
-interface TimeWindow {
-  startTime: string;
-  endTime: string;
-}
 
 @Injectable()
 export class NextAvailableService {
@@ -34,17 +29,19 @@ export class NextAvailableService {
     return result;
   }
 
-  private async hasAvailability(doctorId: string, date: string): Promise<boolean> {
+  // FIX 1 — Check if day is a working day (has recurring or custom availability)
+  private async isWorkingDay(doctorId: string, date: string): Promise<boolean> {
     const dateObj = new Date(date);
     const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
     const dayOfWeek = days[dateObj.getDay()];
 
+    // Check custom availability first
     const customAvailability = await this.customRepo.find({
       where: { doctor: { id: doctorId }, date, isActive: true },
     });
-
     if (customAvailability.length > 0) return true;
 
+    // Check recurring availability
     const recurringAvailability = await this.recurringRepo.find({
       where: { doctor: { id: doctorId }, dayOfWeek: dayOfWeek as any, isActive: true },
     });
@@ -52,10 +49,15 @@ export class NextAvailableService {
     return recurringAvailability.length > 0;
   }
 
-  private async getAvailableSlots(doctorId: string, date: string): Promise<Slot[]> {
+  private async getAvailableStreamSlots(doctorId: string, date: string): Promise<Slot[]> {
     const now = new Date();
     const slots = await this.slotRepo.find({
-      where: { doctor: { id: doctorId }, date, status: SlotStatus.AVAILABLE },
+      where: {
+        doctor: { id: doctorId },
+        date,
+        status: SlotStatus.AVAILABLE,
+        slotType: SlotType.STREAM,
+      },
       order: { startTime: 'ASC' },
     });
 
@@ -65,16 +67,25 @@ export class NextAvailableService {
     });
   }
 
-  private async getAvailableWaves(doctorId: string, date: string): Promise<Slot[]> {
+  // FIX 2 — WAVE availability now filters by slot status AND remaining capacity
+  private async getAvailableWaveSlots(doctorId: string, date: string): Promise<Slot[]> {
     const now = new Date();
     const waves = await this.slotRepo.find({
-      where: { doctor: { id: doctorId }, date, slotType: SlotType.WAVE },
+      where: {
+        doctor: { id: doctorId },
+        date,
+        slotType: SlotType.WAVE,
+        status: SlotStatus.AVAILABLE, // ← added status filter
+      },
       order: { startTime: 'ASC' },
     });
 
     return waves.filter(wave => {
       const waveDateTime = new Date(`${wave.date}T${wave.startTime}`);
-      return waveDateTime > now && wave.bookedCount < wave.maxCapacity;
+      return (
+        waveDateTime > now &&
+        wave.bookedCount < wave.maxCapacity // ← also check capacity
+      );
     });
   }
 
@@ -84,44 +95,89 @@ export class NextAvailableService {
 
     const today = new Date();
     const todayStr = this.formatDate(today);
-    const searchLimit = 30;
 
     // Check today first
     const todaySlots = doctor.schedulingType === SchedulingType.STREAM
-      ? await this.getAvailableSlots(doctorId, todayStr)
-      : await this.getAvailableWaves(doctorId, todayStr);
+      ? await this.getAvailableStreamSlots(doctorId, todayStr)
+      : await this.getAvailableWaveSlots(doctorId, todayStr);
 
     if (todaySlots.length > 0) {
       return this.formatResponse(doctor, todayStr, todaySlots, true);
     }
 
-    // Search next 30 working days
-    for (let i = 1; i <= searchLimit; i++) {
-      const searchDate = this.addDays(today, i);
-      const searchDateStr = this.formatDate(searchDate);
+    // FIX 1 — Search 30 WORKING days (skip non-working days, don't count them)
+    let workingDaysChecked = 0;
+    let calendarDaysAhead = 1;
+    const maxWorkingDays = 30;
 
-      const hasAvail = await this.hasAvailability(doctorId, searchDateStr);
-      if (!hasAvail) continue;
+    while (workingDaysChecked < maxWorkingDays) {
+      const searchDate = this.addDays(today, calendarDaysAhead);
+      const searchDateStr = this.formatDate(searchDate);
+      calendarDaysAhead++;
+
+      // Check if this is a working day
+      const working = await this.isWorkingDay(doctorId, searchDateStr);
+      if (!working) {
+        // Skip non-working days but don't count them
+        continue;
+      }
+
+      // It's a working day — count it
+      workingDaysChecked++;
 
       const availableSlots = doctor.schedulingType === SchedulingType.STREAM
-        ? await this.getAvailableSlots(doctorId, searchDateStr)
-        : await this.getAvailableWaves(doctorId, searchDateStr);
+        ? await this.getAvailableStreamSlots(doctorId, searchDateStr)
+        : await this.getAvailableWaveSlots(doctorId, searchDateStr);
 
       if (availableSlots.length > 0) {
         return this.formatResponse(doctor, searchDateStr, availableSlots, false);
       }
     }
 
-    return {
-      message: 'No appointments available in the next 30 working days. Please try again later.',
-      doctor: {
-        id: doctor.id,
-        fullName: doctor.fullName,
-        specialization: doctor.specialization,
-      },
-      nextAvailableDate: null,
-      slots: [],
-    };
+    // FIX 3 — Throw proper NotFoundException instead of returning object
+    throw new NotFoundException(
+      'No appointments available in the next 30 working days. Please try again later.',
+    );
+  }
+
+  async checkTodayAvailability(doctorId: string) {
+    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    const today = new Date();
+    const todayStr = this.formatDate(today);
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayName = days[today.getDay()];
+
+    const isWorking = await this.isWorkingDay(doctorId, todayStr);
+    if (!isWorking) {
+      return {
+        message: `Doctor is not available on ${dayName}s`,
+        date: todayStr,
+        dayOfWeek: dayName,
+        isWorkingDay: false,
+        slots: [],
+      };
+    }
+
+    const slots = doctor.schedulingType === SchedulingType.STREAM
+      ? await this.getAvailableStreamSlots(doctorId, todayStr)
+      : await this.getAvailableWaveSlots(doctorId, todayStr);
+
+    if (slots.length === 0) {
+      return {
+        message: 'All slots are fully booked for today',
+        date: todayStr,
+        dayOfWeek: dayName,
+        isWorkingDay: true,
+        fullyBooked: true,
+        schedulingType: doctor.schedulingType,
+        slots: [],
+        suggestion: 'Use /doctor/:id/next-available to find the next available appointment',
+      };
+    }
+
+    return this.formatResponse(doctor, todayStr, slots, true);
   }
 
   private formatResponse(
@@ -138,7 +194,7 @@ export class NextAvailableService {
       return {
         message: isToday
           ? 'Slots available today! Book now.'
-          : `Today is fully booked. Next available date found!`,
+          : 'Today is fully booked. Next available date found!',
         isToday,
         nextAvailableDate: date,
         dayOfWeek: dayName,
@@ -162,7 +218,7 @@ export class NextAvailableService {
       return {
         message: isToday
           ? 'Wave slots available today! Book now.'
-          : `Today is fully booked. Next available wave found!`,
+          : 'Today is fully booked. Next available wave found!',
         isToday,
         nextAvailableDate: date,
         dayOfWeek: dayName,
@@ -186,45 +242,5 @@ export class NextAvailableService {
         })),
       };
     }
-  }
-
-  async checkTodayAvailability(doctorId: string) {
-    const doctor = await this.doctorRepo.findOne({ where: { id: doctorId } });
-    if (!doctor) throw new NotFoundException('Doctor not found');
-
-    const today = new Date();
-    const todayStr = this.formatDate(today);
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayName = days[today.getDay()];
-
-    const hasAvail = await this.hasAvailability(doctorId, todayStr);
-    if (!hasAvail) {
-      return {
-        message: `Doctor is not available on ${dayName}s`,
-        date: todayStr,
-        dayOfWeek: dayName,
-        isWorkingDay: false,
-        slots: [],
-      };
-    }
-
-    const slots = doctor.schedulingType === SchedulingType.STREAM
-      ? await this.getAvailableSlots(doctorId, todayStr)
-      : await this.getAvailableWaves(doctorId, todayStr);
-
-    if (slots.length === 0) {
-      return {
-        message: 'All slots are fully booked for today',
-        date: todayStr,
-        dayOfWeek: dayName,
-        isWorkingDay: true,
-        fullyBooked: true,
-        schedulingType: doctor.schedulingType,
-        slots: [],
-        suggestion: 'Use /doctor/:id/next-available to find the next available appointment',
-      };
-    }
-
-    return this.formatResponse(doctor, todayStr, slots, true);
   }
 }
