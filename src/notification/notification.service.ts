@@ -7,6 +7,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notification, NotificationType } from './notification.entity';
 
+export interface CreateNotificationDto {
+  patientId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+}
+
 @Injectable()
 export class NotificationService {
   constructor(
@@ -14,20 +21,20 @@ export class NotificationService {
     private notificationRepo: Repository<Notification>,
   ) {}
 
-  async createNotification(
-    patientId: string,
-    title: string,
-    message: string,
-    type: NotificationType,
-  ): Promise<Notification> {
-    const notification = this.notificationRepo.create({
-      patient: { id: patientId },
-      title,
-      message,
-      type,
-      isRead: false,
-    });
-    return await this.notificationRepo.save(notification);
+  // ✅ Reusable method — call notificationService.create(...) from anywhere
+  async create(dto: CreateNotificationDto): Promise<void> {
+    try {
+      const notification = this.notificationRepo.create({
+        patient: { id: dto.patientId },
+        title: dto.title,
+        message: dto.message,
+        type: dto.type,
+        isRead: false,
+      });
+      await this.notificationRepo.save(notification);
+    } catch (e) {
+      console.error(`[NotificationService] Failed to create notification: ${e.message}`);
+    }
   }
 
   async getNotifications(
