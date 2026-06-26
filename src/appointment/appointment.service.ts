@@ -45,19 +45,13 @@ export class AppointmentService {
       where: { doctor: { id: doctorId }, slotType },
       order: { date: 'ASC', startTime: 'ASC' },
     });
-
     const now = new Date();
 
     if (slotType === SlotType.STREAM) {
       const availableSlot = slots.find(s => {
         const slotDateTime = new Date(`${s.date}T${s.startTime}`);
-        return (
-          s.status === SlotStatus.AVAILABLE &&
-          slotDateTime > now &&
-          s.date >= date
-        );
+        return s.status === SlotStatus.AVAILABLE && slotDateTime > now && s.date >= date;
       });
-
       if (availableSlot) {
         return {
           suggested: true,
@@ -73,13 +67,8 @@ export class AppointmentService {
     } else {
       const availableWave = slots.find(s => {
         const slotDateTime = new Date(`${s.date}T${s.startTime}`);
-        return (
-          s.bookedCount < s.maxCapacity &&
-          slotDateTime > now &&
-          s.date >= date
-        );
+        return s.bookedCount < s.maxCapacity && slotDateTime > now && s.date >= date;
       });
-
       if (availableWave) {
         return {
           suggested: true,
@@ -93,7 +82,6 @@ export class AppointmentService {
         };
       }
     }
-
     return null;
   }
 
@@ -152,13 +140,12 @@ export class AppointmentService {
       });
       await this.appointmentRepo.save(appointment);
 
-      // Send notification
-      await this.notificationService.createNotification(
+      await this.notificationService.create({
         patientId,
-        '🏥 Appointment Booked!',
-        `Your WAVE appointment with ${doctor.fullName} is confirmed for ${dto.date} from ${dto.startTime} to ${dto.endTime}. Token Number: ${tokenNumber}`,
-        NotificationType.APPOINTMENT_BOOKED,
-      );
+        title: '🏥 Appointment Booked Successfully!',
+        message: `Your WAVE appointment with ${doctor.fullName || 'Doctor'} has been booked for ${dto.date} from ${dto.startTime} to ${dto.endTime}. Your Token Number is ${tokenNumber}.`,
+        type: NotificationType.APPOINTMENT_BOOKED,
+      });
 
       return {
         message: 'Wave appointment booked successfully',
@@ -199,13 +186,12 @@ export class AppointmentService {
     });
     await this.appointmentRepo.save(appointment);
 
-    // Send notification
-    await this.notificationService.createNotification(
+    await this.notificationService.create({
       patientId,
-      '🏥 Appointment Booked!',
-      `Your appointment with ${doctor.fullName} is confirmed for ${dto.date} at ${dto.startTime}`,
-      NotificationType.APPOINTMENT_BOOKED,
-    );
+      title: '🏥 Appointment Booked Successfully!',
+      message: `Your appointment with ${doctor.fullName || 'Doctor'} has been booked successfully for ${dto.date} at ${dto.startTime}. Please arrive 10 minutes early.`,
+      type: NotificationType.APPOINTMENT_BOOKED,
+    });
 
     return {
       message: 'Stream appointment booked successfully',
@@ -220,7 +206,11 @@ export class AppointmentService {
     };
   }
 
-  async rescheduleAppointment(patientId: string, appointmentId: string, dto: RescheduleAppointmentDto) {
+  async rescheduleAppointment(
+    patientId: string,
+    appointmentId: string,
+    dto: RescheduleAppointmentDto,
+  ) {
     const appointment = await this.appointmentRepo.findOne({
       where: { id: appointmentId },
       relations: ['patient', 'slot', 'doctor'],
@@ -288,13 +278,12 @@ export class AppointmentService {
       appointment.tokenNumber = tokenNumber;
       await this.appointmentRepo.save(appointment);
 
-      // Send notification
-      await this.notificationService.createNotification(
+      await this.notificationService.create({
         patientId,
-        '🔄 Appointment Rescheduled',
-        `Your appointment has been rescheduled to ${dto.date} from ${dto.startTime} to ${dto.endTime}. New Token: ${tokenNumber}`,
-        NotificationType.APPOINTMENT_RESCHEDULED,
-      );
+        title: '🔄 Appointment Rescheduled',
+        message: `Your WAVE appointment has been rescheduled to ${dto.date} from ${dto.startTime} to ${dto.endTime}. Your new Token Number is ${tokenNumber}.`,
+        type: NotificationType.APPOINTMENT_RESCHEDULED,
+      });
 
       return {
         message: 'Wave appointment rescheduled successfully',
@@ -328,13 +317,12 @@ export class AppointmentService {
     appointment.slot = newSlot;
     await this.appointmentRepo.save(appointment);
 
-    // Send notification
-    await this.notificationService.createNotification(
+    await this.notificationService.create({
       patientId,
-      '🔄 Appointment Rescheduled',
-      `Your appointment has been rescheduled to ${dto.date} at ${dto.startTime}`,
-      NotificationType.APPOINTMENT_RESCHEDULED,
-    );
+      title: '🔄 Appointment Rescheduled',
+      message: `Your appointment has been rescheduled to ${dto.date} at ${dto.startTime}. Please make a note of the new timing.`,
+      type: NotificationType.APPOINTMENT_RESCHEDULED,
+    });
 
     return {
       message: 'Stream appointment rescheduled successfully',
@@ -356,9 +344,7 @@ export class AppointmentService {
       order: { date: 'ASC', startTime: 'ASC' },
     });
 
-    if (appointments.length === 0) {
-      return { message: 'No appointments found', data: [] };
-    }
+    if (appointments.length === 0) return { message: 'No appointments found', data: [] };
 
     return {
       total: appointments.length,
@@ -405,13 +391,12 @@ export class AppointmentService {
       await this.slotRepo.save(appointment.slot);
     }
 
-    // Send notification
-    await this.notificationService.createNotification(
+    await this.notificationService.create({
       patientId,
-      '❌ Appointment Cancelled',
-      `Your appointment with ${appointment.doctor?.fullName || 'your doctor'} on ${appointment.date} at ${appointment.startTime} has been cancelled`,
-      NotificationType.APPOINTMENT_CANCELLED,
-    );
+      title: '❌ Appointment Cancelled',
+      message: `Your appointment scheduled on ${appointment.date} at ${appointment.startTime} with ${appointment.doctor?.fullName || 'your doctor'} has been cancelled successfully.`,
+      type: NotificationType.APPOINTMENT_CANCELLED,
+    });
 
     return { message: 'Appointment cancelled successfully' };
   }
@@ -483,14 +468,13 @@ export class AppointmentService {
       await this.slotRepo.save(appointment.slot);
     }
 
-    // Send notification to patient
     if (appointment.patient) {
-      await this.notificationService.createNotification(
-        appointment.patient.id,
-        '❌ Appointment Cancelled by Doctor',
-        `Your appointment with Dr. ${doctor.fullName} on ${appointment.date} at ${appointment.startTime} has been cancelled by the doctor`,
-        NotificationType.APPOINTMENT_CANCELLED,
-      );
+      await this.notificationService.create({
+        patientId: appointment.patient.id,
+        title: '❌ Appointment Cancelled by Doctor',
+        message: `Your appointment scheduled on ${appointment.date} at ${appointment.startTime} has been cancelled by Dr. ${doctor.fullName}. Please rebook at your convenience.`,
+        type: NotificationType.APPOINTMENT_CANCELLED,
+      });
     }
 
     return { message: 'Appointment cancelled successfully by doctor' };
