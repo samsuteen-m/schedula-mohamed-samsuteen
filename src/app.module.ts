@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
 import { AppointmentModule } from './appointment/appointment.module';
@@ -9,6 +10,7 @@ import { PatientModule } from './patient/patient.module';
 import { AvailabilityModule } from './availability/availability.module';
 import { SlotModule } from './slot/slot.module';
 import { NotificationModule } from './notification/notification.module';
+import { ReminderModule } from './reminder/reminder.module';
 import { User } from './user/user.entity';
 import { Doctor } from './doctor/doctor.entity';
 import { Patient } from './patient/patient.entity';
@@ -21,6 +23,7 @@ import { Notification } from './notification/notification.entity';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
@@ -28,7 +31,11 @@ import { Notification } from './notification/notification.entity';
       username: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || '123456',
       database: process.env.DB_NAME || 'schedula',
-      entities: [User, Doctor, Patient, RecurringAvailability, CustomAvailability, Slot, Appointment, Notification],
+      entities: [
+        User, Doctor, Patient,
+        RecurringAvailability, CustomAvailability,
+        Slot, Appointment, Notification,
+      ],
       synchronize: true,
       ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
     }),
@@ -39,6 +46,7 @@ import { Notification } from './notification/notification.entity';
     AvailabilityModule,
     SlotModule,
     NotificationModule,
+    ReminderModule,
   ],
   controllers: [AppController],
 })
