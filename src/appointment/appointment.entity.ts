@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { User } from '../user/user.entity';
 import { Doctor } from '../doctor/doctor.entity';
 import { Slot } from '../slot/slot.entity';
@@ -6,6 +14,7 @@ import { Slot } from '../slot/slot.entity';
 export enum AppointmentStatus {
   BOOKED = 'BOOKED',
   CANCELLED = 'CANCELLED',
+  COMPLETED = 'COMPLETED',
 }
 
 @Entity('appointments')
@@ -46,6 +55,9 @@ export class Appointment {
 
   @Column({ nullable: true })
   schedulingType: string;
+
+  @Column({ default: false })
+  reminderSent: boolean;
 
   @CreateDateColumn()
   createdAt: Date;
