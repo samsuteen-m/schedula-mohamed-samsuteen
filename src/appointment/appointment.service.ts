@@ -25,6 +25,38 @@ export class AppointmentService {
     private notificationService: NotificationService,
   ) {}
 
+  // ✅ Helper — get today's date in YYYY-MM-DD format
+  private getTodayStr(): string {
+    return new Date().toISOString().split('T')[0];
+  }
+
+  // ✅ Helper — validate date format
+  private isValidDate(date: string): boolean {
+    const dateObj = new Date(date);
+    return !isNaN(dateObj.getTime());
+  }
+
+  // ✅ NEW — Booking Window Validation (Day 18)
+  private validateBookingWindow(date: string): void {
+    if (!this.isValidDate(date)) {
+      throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
+    }
+
+    const todayStr = this.getTodayStr();
+
+    if (date < todayStr) {
+      throw new BadRequestException(
+        `Booking for past dates is not allowed. Today is ${todayStr}`,
+      );
+    }
+
+    if (date > todayStr) {
+      throw new BadRequestException(
+        `Booking for future dates is not allowed. You can only book for today (${todayStr})`,
+      );
+    }
+  }
+
   private checkCutoffTime(date: string, startTime: string): void {
     const appointmentDateTime = new Date(`${date}T${startTime}`);
     const now = new Date();
@@ -86,12 +118,18 @@ export class AppointmentService {
   }
 
   async bookAppointment(patientId: string, dto: BookAppointmentDto) {
+    // ✅ NEW — Validate booking window first
+    this.validateBookingWindow(dto.date);
+
     const doctor = await this.doctorRepo.findOne({ where: { id: dto.doctorId } });
     if (!doctor) throw new NotFoundException('Doctor not found');
 
+    // Validate slot time is in the future
     const appointmentDateTime = new Date(`${dto.date}T${dto.startTime}`);
     if (appointmentDateTime <= new Date()) {
-      throw new BadRequestException('Cannot book appointment for past date or time');
+      throw new BadRequestException(
+        'Cannot book appointment for a past time slot. Please choose a future time.',
+      );
     }
 
     const slot = await this.slotRepo.findOne({
@@ -143,7 +181,7 @@ export class AppointmentService {
       await this.notificationService.create({
         patientId,
         title: '🏥 Appointment Booked Successfully!',
-        message: `Your WAVE appointment with ${doctor.fullName || 'Doctor'} has been booked for ${dto.date} from ${dto.startTime} to ${dto.endTime}. Your Token Number is ${tokenNumber}.`,
+        message: `Your WAVE appointment with ${doctor.fullName || 'Doctor'} has been booked for today (${dto.date}) from ${dto.startTime} to ${dto.endTime}. Your Token Number is ${tokenNumber}.`,
         type: NotificationType.APPOINTMENT_BOOKED,
       });
 
@@ -189,7 +227,7 @@ export class AppointmentService {
     await this.notificationService.create({
       patientId,
       title: '🏥 Appointment Booked Successfully!',
-      message: `Your appointment with ${doctor.fullName || 'Doctor'} has been booked successfully for ${dto.date} at ${dto.startTime}. Please arrive 10 minutes early.`,
+      message: `Your appointment with ${doctor.fullName || 'Doctor'} has been booked for today (${dto.date}) at ${dto.startTime}. Please arrive 10 minutes early.`,
       type: NotificationType.APPOINTMENT_BOOKED,
     });
 
@@ -222,6 +260,9 @@ export class AppointmentService {
 
     this.checkCutoffTime(appointment.date, appointment.startTime);
 
+    // ✅ NEW — Reschedule also only allowed for today
+    this.validateBookingWindow(dto.date);
+
     if (
       appointment.date === dto.date &&
       appointment.startTime === dto.startTime &&
@@ -231,7 +272,7 @@ export class AppointmentService {
     }
 
     const newDateTime = new Date(`${dto.date}T${dto.startTime}`);
-    if (newDateTime <= new Date()) throw new BadRequestException('Cannot reschedule to past date or time');
+    if (newDateTime <= new Date()) throw new BadRequestException('Cannot reschedule to a past time slot');
 
     const diffMinutes = (newDateTime.getTime() - new Date().getTime()) / 60000;
     if (diffMinutes < 30) throw new BadRequestException('New slot must be at least 30 minutes from now');
@@ -281,7 +322,7 @@ export class AppointmentService {
       await this.notificationService.create({
         patientId,
         title: '🔄 Appointment Rescheduled',
-        message: `Your WAVE appointment has been rescheduled to ${dto.date} from ${dto.startTime} to ${dto.endTime}. Your new Token Number is ${tokenNumber}.`,
+        message: `Your WAVE appointment has been rescheduled to today (${dto.date}) from ${dto.startTime} to ${dto.endTime}. Your new Token Number is ${tokenNumber}.`,
         type: NotificationType.APPOINTMENT_RESCHEDULED,
       });
 
@@ -320,7 +361,7 @@ export class AppointmentService {
     await this.notificationService.create({
       patientId,
       title: '🔄 Appointment Rescheduled',
-      message: `Your appointment has been rescheduled to ${dto.date} at ${dto.startTime}. Please make a note of the new timing.`,
+      message: `Your appointment has been rescheduled to today (${dto.date}) at ${dto.startTime}. Please make a note of the new timing.`,
       type: NotificationType.APPOINTMENT_RESCHEDULED,
     });
 
