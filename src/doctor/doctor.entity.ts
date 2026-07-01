@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  OneToOne,
+  JoinColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { User } from '../user/user.entity';
 
 export enum SchedulingType {
@@ -48,6 +56,13 @@ export class Doctor {
     default: SchedulingType.STREAM,
   })
   schedulingType: SchedulingType;
+
+  // ✅ NEW Day 20 fields
+  @Column({ default: false })
+  allowFutureBooking: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  maxFutureBookingDays: number;
 
   @CreateDateColumn()
   createdAt: Date;

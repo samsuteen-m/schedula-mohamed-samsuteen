@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsInt, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class DoctorProfileDto {
   @IsString()
@@ -36,4 +37,16 @@ export class DoctorProfileDto {
   @IsBoolean()
   @IsOptional()
   isAvailable: boolean;
+
+  // ✅ NEW Day 20 fields
+  @IsBoolean()
+  @IsOptional()
+  allowFutureBooking: boolean;
+
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  @IsOptional()
+  @Type(() => Number)
+  maxFutureBookingDays: number;
 }
