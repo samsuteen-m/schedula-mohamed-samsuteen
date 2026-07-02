@@ -11,6 +11,7 @@ import { AvailabilityModule } from './availability/availability.module';
 import { SlotModule } from './slot/slot.module';
 import { NotificationModule } from './notification/notification.module';
 import { ReminderModule } from './reminder/reminder.module';
+import { LeaveModule } from './leave/leave.module';
 import { User } from './user/user.entity';
 import { Doctor } from './doctor/doctor.entity';
 import { Patient } from './patient/patient.entity';
@@ -19,6 +20,7 @@ import { CustomAvailability } from './availability/custom-availability.entity';
 import { Slot } from './slot/slot.entity';
 import { Appointment } from './appointment/appointment.entity';
 import { Notification } from './notification/notification.entity';
+import { DoctorLeave } from './leave/leave.entity';
 
 @Module({
   imports: [
@@ -34,7 +36,7 @@ import { Notification } from './notification/notification.entity';
       entities: [
         User, Doctor, Patient,
         RecurringAvailability, CustomAvailability,
-        Slot, Appointment, Notification,
+        Slot, Appointment, Notification, DoctorLeave,
       ],
       synchronize: true,
       ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
@@ -47,6 +49,7 @@ import { Notification } from './notification/notification.entity';
     SlotModule,
     NotificationModule,
     ReminderModule,
+    LeaveModule,
   ],
   controllers: [AppController],
 })
