@@ -53,6 +53,8 @@ export class AppointmentService {
 
   // ✅ Day 20 — main booking date validation (replaces Day 18 & 19 logic)
   private validateBookingDate(date: string, doctor: Doctor): void {
+  // ✅ Day 18 — date must be today only
+  private validateBookingWindow(date: string): void {
     if (!this.isValidDate(date)) {
       throw new BadRequestException('Invalid date format. Use YYYY-MM-DD');
     }
@@ -135,6 +137,76 @@ export class AppointmentService {
     }
   }
 
+  // ✅ NEW — Day 19 — time-based booking window
+  // Booking opens 2 hours before consultation start, closes 1 hour before consultation end
+  private validateBookingTimeWindow(consultationHours: string | null): void {
+    if (!consultationHours || !consultationHours.includes('-')) {
+      // Doctor hasn't set proper consultation hours — skip time window check gracefully
+      return;
+    }
+
+    const [startPart, endPart] = consultationHours.split('-').map(s => s.trim());
+
+    const startTime24 = this.parseTo24Hour(startPart);
+    const endTime24 = this.parseTo24Hour(endPart);
+
+    if (!startTime24 || !endTime24) {
+      throw new BadRequestException(
+        'Doctor consultation timings are invalid. Please contact support.',
+      );
+    }
+
+    const now = new Date();
+    const todayStr = this.getTodayStr();
+
+    const consultationStart = new Date(`${todayStr}T${startTime24}:00`);
+    const consultationEnd = new Date(`${todayStr}T${endTime24}:00`);
+
+    if (consultationEnd <= consultationStart) {
+      throw new BadRequestException(
+        'Invalid consultation timings configured for this doctor.',
+      );
+    }
+
+    const bookingOpensAt = new Date(consultationStart.getTime() - 2 * 60 * 60 * 1000); // 2 hrs before start
+    const bookingClosesAt = new Date(consultationEnd.getTime() - 1 * 60 * 60 * 1000); // 1 hr before end
+
+    if (now < bookingOpensAt) {
+      throw new BadRequestException(
+        `Booking window has not opened yet. You can book starting from ${this.formatTime(bookingOpensAt)}.`,
+      );
+    }
+
+    if (now > bookingClosesAt) {
+      throw new BadRequestException(
+        `Booking window has closed. Bookings closed at ${this.formatTime(bookingClosesAt)} for today.`,
+      );
+    }
+  }
+
+  // Converts "9:00 AM" / "09:00" style strings to 24-hour "HH:MM"
+  private parseTo24Hour(timeStr: string): string | null {
+    if (!timeStr) return null;
+
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const meridian = match[3]?.toUpperCase();
+
+    if (meridian === 'PM' && hours !== 12) hours += 12;
+    if (meridian === 'AM' && hours === 12) hours = 0;
+
+    if (hours < 0 || hours > 23) return null;
+
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+  }
+
+  private formatTime(date: Date): string {
+    return date.toTimeString().slice(0, 5);
+  }
+
   private checkCutoffTime(date: string, startTime: string): void {
     const appointmentDateTime = new Date(`${date}T${startTime}`);
     const now = new Date();
@@ -189,6 +261,13 @@ export class AppointmentService {
     if (dto.date === this.getTodayStr()) {
       this.validateBookingTimeWindow(doctor.consultationHours);
     }
+    this.validateBookingWindow(dto.date);
+
+    const doctor = await this.doctorRepo.findOne({ where: { id: dto.doctorId } });
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    // ✅ NEW — time-based booking window check
+    this.validateBookingTimeWindow(doctor.consultationHours);
 
     const appointmentDateTime = new Date(`${dto.date}T${dto.startTime}`);
     if (appointmentDateTime <= new Date()) {
@@ -320,6 +399,16 @@ export class AppointmentService {
     }
 
     if (appointment.date === dto.date && appointment.startTime === dto.startTime && appointment.endTime === dto.endTime) {
+    this.validateBookingWindow(dto.date);
+
+    // ✅ NEW — also enforce time window on reschedule
+    this.validateBookingTimeWindow(appointment.doctor.consultationHours);
+
+    if (
+      appointment.date === dto.date &&
+      appointment.startTime === dto.startTime &&
+      appointment.endTime === dto.endTime
+    ) {
       throw new BadRequestException('New slot is the same as the current appointment');
     }
 
