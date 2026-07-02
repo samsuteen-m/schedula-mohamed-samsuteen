@@ -49,6 +49,12 @@ export class Doctor {
   })
   schedulingType: SchedulingType;
 
+  @Column({ default: false })
+  allowFutureBooking: boolean;
+
+  @Column({ nullable: true })
+  maxFutureBookingDays: number;
+
   @CreateDateColumn()
   createdAt: Date;
 
