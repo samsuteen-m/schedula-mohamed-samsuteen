@@ -34,6 +34,25 @@ export class AppointmentService {
     return !isNaN(dateObj.getTime());
   }
 
+  private parseTo24Hour(timeStr: string): string | null {
+    if (!timeStr) return null;
+    const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+    if (!match) return null;
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const meridian = match[3]?.toUpperCase();
+    if (meridian === 'PM' && hours !== 12) hours += 12;
+    if (meridian === 'AM' && hours === 12) hours = 0;
+    if (hours < 0 || hours > 23) return null;
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+  }
+
+  private formatTime(date: Date): string {
+    return date.toTimeString().slice(0, 5);
+  }
+
+  // ✅ Day 20 — main booking date validation (replaces Day 18 & 19 logic)
+  private validateBookingDate(date: string, doctor: Doctor): void {
   // ✅ Day 18 — date must be today only
   private validateBookingWindow(date: string): void {
     if (!this.isValidDate(date)) {
@@ -41,16 +60,79 @@ export class AppointmentService {
     }
 
     const todayStr = this.getTodayStr();
+    const today = new Date(todayStr);
+    const bookingDate = new Date(date);
 
+    // Past date — always rejected
     if (date < todayStr) {
       throw new BadRequestException(
         `Booking for past dates is not allowed. Today is ${todayStr}`,
       );
     }
 
-    if (date > todayStr) {
+    // Future booking disabled
+    if (!doctor.allowFutureBooking) {
+      if (date > todayStr) {
+        throw new BadRequestException(
+          `This doctor only accepts same-day appointments. You can only book for today (${todayStr})`,
+        );
+      }
+      return; // today is fine
+    }
+
+    // Future booking enabled — check max days
+    const maxDays = doctor.maxFutureBookingDays ?? 7; // default 7 days
+
+    if (maxDays < 1) {
       throw new BadRequestException(
-        `Booking for future dates is not allowed. You can only book for today (${todayStr})`,
+        'Invalid booking configuration. Please contact support.',
+      );
+    }
+
+    const maxAllowedDate = new Date(today);
+    maxAllowedDate.setDate(today.getDate() + maxDays);
+    const maxAllowedStr = maxAllowedDate.toISOString().split('T')[0];
+
+    if (bookingDate > maxAllowedDate) {
+      throw new BadRequestException(
+        `Booking is only allowed up to ${maxDays} day(s) in advance. Latest allowed date is ${maxAllowedStr}`,
+      );
+    }
+  }
+
+  // ✅ Day 19 — time window validation (unchanged)
+  private validateBookingTimeWindow(consultationHours: string | null): void {
+    if (!consultationHours || !consultationHours.includes('-')) return;
+
+    const [startPart, endPart] = consultationHours.split('-').map(s => s.trim());
+    const startTime24 = this.parseTo24Hour(startPart);
+    const endTime24 = this.parseTo24Hour(endPart);
+
+    if (!startTime24 || !endTime24) {
+      throw new BadRequestException('Doctor consultation timings are invalid.');
+    }
+
+    const todayStr = this.getTodayStr();
+    const consultationStart = new Date(`${todayStr}T${startTime24}:00`);
+    const consultationEnd = new Date(`${todayStr}T${endTime24}:00`);
+
+    if (consultationEnd <= consultationStart) {
+      throw new BadRequestException('Invalid consultation timings configured for this doctor.');
+    }
+
+    const bookingOpensAt = new Date(consultationStart.getTime() - 2 * 60 * 60 * 1000);
+    const bookingClosesAt = new Date(consultationEnd.getTime() - 1 * 60 * 60 * 1000);
+    const now = new Date();
+
+    if (now < bookingOpensAt) {
+      throw new BadRequestException(
+        `Booking window has not opened yet. You can book starting from ${this.formatTime(bookingOpensAt)}.`,
+      );
+    }
+
+    if (now > bookingClosesAt) {
+      throw new BadRequestException(
+        `Booking window has closed. Bookings closed at ${this.formatTime(bookingClosesAt)} for today.`,
       );
     }
   }
@@ -130,23 +212,16 @@ export class AppointmentService {
     const now = new Date();
     const diffMinutes = (appointmentDateTime.getTime() - now.getTime()) / 60000;
     if (diffMinutes < 30) {
-      throw new BadRequestException(
-        'Cannot modify appointment within 30 minutes of start time',
-      );
+      throw new BadRequestException('Cannot modify appointment within 30 minutes of start time');
     }
   }
 
-  private async suggestNextAvailableSlot(
-    doctorId: string,
-    date: string,
-    slotType: SlotType,
-  ): Promise<any> {
+  private async suggestNextAvailableSlot(doctorId: string, date: string, slotType: SlotType): Promise<any> {
     const slots = await this.slotRepo.find({
       where: { doctor: { id: doctorId }, slotType },
       order: { date: 'ASC', startTime: 'ASC' },
     });
     const now = new Date();
-
     if (slotType === SlotType.STREAM) {
       const availableSlot = slots.find(s => {
         const slotDateTime = new Date(`${s.date}T${s.startTime}`);
@@ -156,12 +231,7 @@ export class AppointmentService {
         return {
           suggested: true,
           message: 'Requested slot unavailable. Here is the next available slot',
-          nextSlot: {
-            date: availableSlot.date,
-            startTime: availableSlot.startTime,
-            endTime: availableSlot.endTime,
-            slotId: availableSlot.id,
-          },
+          nextSlot: { date: availableSlot.date, startTime: availableSlot.startTime, endTime: availableSlot.endTime, slotId: availableSlot.id },
         };
       }
     } else {
@@ -173,12 +243,7 @@ export class AppointmentService {
         return {
           suggested: true,
           message: 'Requested wave is full. Here is the next available wave',
-          nextWave: {
-            date: availableWave.date,
-            timeWindow: `${availableWave.startTime} - ${availableWave.endTime}`,
-            availableCapacity: availableWave.maxCapacity - availableWave.bookedCount,
-            slotId: availableWave.id,
-          },
+          nextWave: { date: availableWave.date, timeWindow: `${availableWave.startTime} - ${availableWave.endTime}`, availableCapacity: availableWave.maxCapacity - availableWave.bookedCount, slotId: availableWave.id },
         };
       }
     }
@@ -186,6 +251,16 @@ export class AppointmentService {
   }
 
   async bookAppointment(patientId: string, dto: BookAppointmentDto) {
+    const doctor = await this.doctorRepo.findOne({ where: { id: dto.doctorId } });
+    if (!doctor) throw new NotFoundException('Doctor not found');
+
+    // ✅ Day 20 — validate date based on doctor's config
+    this.validateBookingDate(dto.date, doctor);
+
+    // ✅ Day 19 — time window check (only applies when booking today)
+    if (dto.date === this.getTodayStr()) {
+      this.validateBookingTimeWindow(doctor.consultationHours);
+    }
     this.validateBookingWindow(dto.date);
 
     const doctor = await this.doctorRepo.findOne({ where: { id: dto.doctorId } });
@@ -196,18 +271,11 @@ export class AppointmentService {
 
     const appointmentDateTime = new Date(`${dto.date}T${dto.startTime}`);
     if (appointmentDateTime <= new Date()) {
-      throw new BadRequestException(
-        'Cannot book appointment for a past time slot. Please choose a future time.',
-      );
+      throw new BadRequestException('Cannot book appointment for a past time slot.');
     }
 
     const slot = await this.slotRepo.findOne({
-      where: {
-        doctor: { id: dto.doctorId },
-        date: dto.date,
-        startTime: dto.startTime,
-        endTime: dto.endTime,
-      },
+      where: { doctor: { id: dto.doctorId }, date: dto.date, startTime: dto.startTime, endTime: dto.endTime },
     });
 
     if (!slot) {
@@ -218,10 +286,7 @@ export class AppointmentService {
     if (slot.slotType === SlotType.WAVE) {
       if (slot.bookedCount >= slot.maxCapacity) {
         const suggestion = await this.suggestNextAvailableSlot(dto.doctorId, dto.date, SlotType.WAVE);
-        throw new BadRequestException({
-          message: `Wave is full! Maximum capacity of ${slot.maxCapacity} patients reached`,
-          ...(suggestion && { suggestion }),
-        });
+        throw new BadRequestException({ message: `Wave is full! Maximum capacity of ${slot.maxCapacity} patients reached`, ...(suggestion && { suggestion }) });
       }
 
       const existingWaveBooking = await this.appointmentRepo.findOne({
@@ -250,7 +315,7 @@ export class AppointmentService {
       await this.notificationService.create({
         patientId,
         title: '🏥 Appointment Booked Successfully!',
-        message: `Your WAVE appointment with ${doctor.fullName || 'Doctor'} has been booked for today (${dto.date}) from ${dto.startTime} to ${dto.endTime}. Your Token Number is ${tokenNumber}.`,
+        message: `Your WAVE appointment with ${doctor.fullName || 'Doctor'} is confirmed for ${dto.date} from ${dto.startTime} to ${dto.endTime}. Your Token Number is ${tokenNumber}.`,
         type: NotificationType.APPOINTMENT_BOOKED,
       });
 
@@ -296,7 +361,7 @@ export class AppointmentService {
     await this.notificationService.create({
       patientId,
       title: '🏥 Appointment Booked Successfully!',
-      message: `Your appointment with ${doctor.fullName || 'Doctor'} has been booked for today (${dto.date}) at ${dto.startTime}. Please arrive 10 minutes early.`,
+      message: `Your appointment with ${doctor.fullName || 'Doctor'} is confirmed for ${dto.date} at ${dto.startTime}. Please arrive 10 minutes early.`,
       type: NotificationType.APPOINTMENT_BOOKED,
     });
 
@@ -313,11 +378,7 @@ export class AppointmentService {
     };
   }
 
-  async rescheduleAppointment(
-    patientId: string,
-    appointmentId: string,
-    dto: RescheduleAppointmentDto,
-  ) {
+  async rescheduleAppointment(patientId: string, appointmentId: string, dto: RescheduleAppointmentDto) {
     const appointment = await this.appointmentRepo.findOne({
       where: { id: appointmentId },
       relations: ['patient', 'slot', 'doctor'],
@@ -328,6 +389,16 @@ export class AppointmentService {
     if (appointment.status === AppointmentStatus.CANCELLED) throw new BadRequestException('Cannot reschedule a cancelled appointment');
 
     this.checkCutoffTime(appointment.date, appointment.startTime);
+
+    // ✅ Day 20 — validate new date against doctor's config
+    this.validateBookingDate(dto.date, appointment.doctor);
+
+    // ✅ Day 19 — time window only when rescheduling to today
+    if (dto.date === this.getTodayStr()) {
+      this.validateBookingTimeWindow(appointment.doctor.consultationHours);
+    }
+
+    if (appointment.date === dto.date && appointment.startTime === dto.startTime && appointment.endTime === dto.endTime) {
     this.validateBookingWindow(dto.date);
 
     // ✅ NEW — also enforce time window on reschedule
@@ -348,20 +419,11 @@ export class AppointmentService {
     if (diffMinutes < 30) throw new BadRequestException('New slot must be at least 30 minutes from now');
 
     const newSlot = await this.slotRepo.findOne({
-      where: {
-        doctor: { id: appointment.doctor.id },
-        date: dto.date,
-        startTime: dto.startTime,
-        endTime: dto.endTime,
-      },
+      where: { doctor: { id: appointment.doctor.id }, date: dto.date, startTime: dto.startTime, endTime: dto.endTime },
     });
 
     if (!newSlot) {
-      const suggestion = await this.suggestNextAvailableSlot(
-        appointment.doctor.id,
-        dto.date,
-        appointment.slot?.slotType || SlotType.STREAM,
-      );
+      const suggestion = await this.suggestNextAvailableSlot(appointment.doctor.id, dto.date, appointment.slot?.slotType || SlotType.STREAM);
       throw new NotFoundException({ message: 'New slot not found', ...(suggestion && { suggestion }) });
     }
 
@@ -392,20 +454,14 @@ export class AppointmentService {
       await this.notificationService.create({
         patientId,
         title: '🔄 Appointment Rescheduled',
-        message: `Your WAVE appointment has been rescheduled to today (${dto.date}) from ${dto.startTime} to ${dto.endTime}. Your new Token Number is ${tokenNumber}.`,
+        message: `Your WAVE appointment has been rescheduled to ${dto.date} from ${dto.startTime} to ${dto.endTime}. New Token: ${tokenNumber}.`,
         type: NotificationType.APPOINTMENT_RESCHEDULED,
       });
 
       return {
         message: 'Wave appointment rescheduled successfully',
         schedulingType: 'WAVE',
-        appointment: {
-          id: appointment.id,
-          date: appointment.date,
-          timeWindow: `${appointment.startTime} - ${appointment.endTime}`,
-          tokenNumber,
-          status: appointment.status,
-        },
+        appointment: { id: appointment.id, date: appointment.date, timeWindow: `${appointment.startTime} - ${appointment.endTime}`, tokenNumber, status: appointment.status },
       };
     }
 
@@ -431,20 +487,14 @@ export class AppointmentService {
     await this.notificationService.create({
       patientId,
       title: '🔄 Appointment Rescheduled',
-      message: `Your appointment has been rescheduled to today (${dto.date}) at ${dto.startTime}. Please make a note of the new timing.`,
+      message: `Your appointment has been rescheduled to ${dto.date} at ${dto.startTime}.`,
       type: NotificationType.APPOINTMENT_RESCHEDULED,
     });
 
     return {
       message: 'Stream appointment rescheduled successfully',
       schedulingType: 'STREAM',
-      appointment: {
-        id: appointment.id,
-        date: appointment.date,
-        startTime: appointment.startTime,
-        endTime: appointment.endTime,
-        status: appointment.status,
-      },
+      appointment: { id: appointment.id, date: appointment.date, startTime: appointment.startTime, endTime: appointment.endTime, status: appointment.status },
     };
   }
 
@@ -467,12 +517,7 @@ export class AppointmentService {
         status: apt.status,
         schedulingType: apt.schedulingType,
         tokenNumber: apt.tokenNumber || null,
-        doctor: {
-          id: apt.doctor?.id,
-          fullName: apt.doctor?.fullName,
-          specialization: apt.doctor?.specialization,
-          consultationFee: apt.doctor?.consultationFee,
-        },
+        doctor: { id: apt.doctor?.id, fullName: apt.doctor?.fullName, specialization: apt.doctor?.specialization, consultationFee: apt.doctor?.consultationFee },
       })),
     };
   }
@@ -505,7 +550,7 @@ export class AppointmentService {
     await this.notificationService.create({
       patientId,
       title: '❌ Appointment Cancelled',
-      message: `Your appointment scheduled on ${appointment.date} at ${appointment.startTime} with ${appointment.doctor?.fullName || 'your doctor'} has been cancelled successfully.`,
+      message: `Your appointment on ${appointment.date} at ${appointment.startTime} with ${appointment.doctor?.fullName || 'your doctor'} has been cancelled.`,
       type: NotificationType.APPOINTMENT_CANCELLED,
     });
 
@@ -534,22 +579,16 @@ export class AppointmentService {
 
     return {
       total: appointments.length,
-      data: appointments
-        .filter(apt => apt.patient)
-        .map(apt => ({
-          id: apt.id,
-          date: apt.date,
-          startTime: apt.startTime,
-          endTime: apt.endTime,
-          status: apt.status,
-          schedulingType: apt.schedulingType,
-          tokenNumber: apt.tokenNumber || null,
-          patient: {
-            id: apt.patient?.id || null,
-            name: apt.patient?.name || null,
-            email: apt.patient?.email || null,
-          },
-        })),
+      data: appointments.filter(apt => apt.patient).map(apt => ({
+        id: apt.id,
+        date: apt.date,
+        startTime: apt.startTime,
+        endTime: apt.endTime,
+        status: apt.status,
+        schedulingType: apt.schedulingType,
+        tokenNumber: apt.tokenNumber || null,
+        patient: { id: apt.patient?.id || null, name: apt.patient?.name || null, email: apt.patient?.email || null },
+      })),
     };
   }
 
@@ -583,7 +622,7 @@ export class AppointmentService {
       await this.notificationService.create({
         patientId: appointment.patient.id,
         title: '❌ Appointment Cancelled by Doctor',
-        message: `Your appointment scheduled on ${appointment.date} at ${appointment.startTime} has been cancelled by Dr. ${doctor.fullName}. Please rebook at your convenience.`,
+        message: `Your appointment on ${appointment.date} at ${appointment.startTime} has been cancelled by Dr. ${doctor.fullName}. Please rebook at your convenience.`,
         type: NotificationType.APPOINTMENT_CANCELLED,
       });
     }
